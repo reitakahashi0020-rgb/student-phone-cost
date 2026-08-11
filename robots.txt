@@ -1,0 +1,3 @@
+User-agent: *
+Allow: /
+Sitemap: https://reitakahashi0020-rgb.github.io/student-phone-cost/sitemap.xml
