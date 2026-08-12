@@ -2,22 +2,26 @@
   "use strict";
 
   const yen = (value) => new Intl.NumberFormat("ja-JP", {
-    style: "currency",
-    currency: "JPY",
-    maximumFractionDigits: 0
+    style: "currency", currency: "JPY", maximumFractionDigits: 0
   }).format(Math.round(value));
-
   const field = (id) => document.getElementById(id);
-  const valueOf = (id) => {
-    const node = field(id);
-    return node ? Math.max(0, Number(node.value) || 0) : 0;
-  };
-  const valueText = (id) => field(id) ? field(id).value : "";
-  const checked = (id) => Boolean(field(id) && field(id).checked);
+  const valueOf = (id) => Math.max(0, Number(field(id)?.value) || 0);
+  const valueText = (id) => field(id)?.value || "";
+  const checked = (id) => Boolean(field(id)?.checked);
   const updateText = (id, value) => {
     const node = field(id);
     if (node) node.textContent = typeof value === "number" ? yen(value) : value;
   };
+
+  function costModel() {
+    try {
+      const model = JSON.parse(field("cost-model")?.textContent || "{}");
+      if (model.horizon_months !== 36 || model.model_kind !== "comparison_budget") throw new Error("invalid model");
+      return model;
+    } catch (_error) {
+      return { horizon_months: 36, model_kind: "comparison_budget", mobile_tiers: [], home_internet_target_yen: 0 };
+    }
+  }
 
   function track(eventName, dimensions) {
     const allowed = {
@@ -32,25 +36,6 @@
     window.dataLayer = window.dataLayer || [];
     window.dataLayer.push(allowed);
     document.dispatchEvent(new CustomEvent("costlab:metric", { detail: allowed }));
-  }
-
-  function mobileTargets(dataUsage, current) {
-    const cost = dataUsage <= 5 ? 1800 : dataUsage <= 20 ? 2800 : 3800;
-    const balance = dataUsage <= 5 ? 2500 : dataUsage <= 20 ? 3500 : 4500;
-    return { cost: Math.min(current, cost), balance: Math.min(current, balance) };
-  }
-
-  function deviceTotals(mode, amount, balance, resale, replacement) {
-    const base = mode === "purchase" ? amount : amount * 36;
-    const saleCredit = replacement === "none" ? 0 : resale;
-    const current = Math.max(0, base + balance - saleCredit);
-    const cost = replacement === "none"
-      ? balance
-      : Math.max(0, balance + base * 0.55 - saleCredit);
-    const balanced = replacement === "none"
-      ? Math.max(balance, base * 0.45)
-      : Math.max(0, balance + base * 0.75 - saleCredit);
-    return { base, saleCredit, current, cost, balanced };
   }
 
   function renderOffers(rules) {
@@ -97,68 +82,53 @@
     }));
   }
 
-  function calculateCosts(options) {
-    const form = field("cost-form");
-    if (!form) return;
-    const currentMobile = valueOf("m1");
-    const dataUsage = valueOf("data-usage");
-    const currentWifi = valueOf("w1");
-    const mode = valueText("device-mode");
-    const deviceAmount = valueOf("d1");
-    const balance = valueOf("balance");
-    const resale = valueOf("sale");
-    const housing = valueText("housing");
-    const wifiStatus = valueText("wifi-status");
-    const replacement = valueText("replacement");
-    const stableHome = checked("stable-home");
-    const device = deviceTotals(mode, deviceAmount, balance, resale, replacement);
-    const currentMobile36 = currentMobile * 36;
-    const effectiveCurrentWifi = wifiStatus === "yes" ? currentWifi : 0;
-    const currentWifi36 = effectiveCurrentWifi * 36;
-    const currentTotal = Math.max(0, currentMobile36 + currentWifi36 + device.current);
-    const targets = mobileTargets(dataUsage, currentMobile);
-    const needsHomeInternet = housing === "alone" && (stableHome || dataUsage > 20);
-    const costWifi = housing === "family" ? 0 : needsHomeInternet ? Math.min(currentWifi || 3800, 3800) : 0;
-    const balanceWifi = housing === "family" ? 0 : needsHomeInternet ? (currentWifi || 4200) : 0;
-    const costMinTotal = Math.max(0, targets.cost * 36 + costWifi * 36 + device.cost);
-    const balancedTotal = Math.max(0, targets.balance * 36 + balanceWifi * 36 + device.balanced);
-    const easyTotal = currentTotal;
-    const saving = currentTotal - costMinTotal;
-    const mobileSavingNeeded = currentMobile - targets.balance >= 800;
-
-    const render = () => {
-      updateText("old3", currentTotal);
-      updateText("min3", costMinTotal);
-      updateText("save3", saving);
-      updateText("breakdown-mobile", currentMobile36);
-      updateText("breakdown-wifi", currentWifi36);
-      updateText("breakdown-device", device.base + balance);
-      updateText("breakdown-sale", device.saleCredit ? -device.saleCredit : 0);
-      updateText("breakdown-total", currentTotal);
-      updateText("plan-min-total", costMinTotal);
-      updateText("plan-balance-total", balancedTotal);
-      updateText("plan-easy-total", easyTotal);
-      updateText("plan-min-detail", needsHomeInternet
-        ? "通信量に合うモバイル枠と、自宅の安定回線を残しながら端末保有期間を長めに置く試算です。"
-        : "自宅回線を持たない前提も含め、通信量に合うモバイル枠と端末保有期間を優先します。");
-      updateText("plan-balance-detail", stableHome
-        ? "自宅通信の安定性を確保し、スマホと端末コストだけを無理なく抑える試算です。"
-        : "コストを抑えつつ、データ容量と買い替え余地を少し残す試算です。");
-      updateText("plan-easy-detail", "契約変更を前提にせず、現在の支払いを36か月続けた比較基準です。");
-      const caption = field("save-caption");
-      if (caption) caption.textContent = saving > 0 ? "コスト最小案との差額" : "現在の条件はすでに低コストです";
-      renderTags(housing, wifiStatus, dataUsage, replacement);
-      renderOffers({
-        mobile_saving: mobileSavingNeeded ? "現在のスマホ月額と利用量の差が大きいため、回線条件の比較対象になります。" : "",
-        home_internet_needed: needsHomeInternet ? "一人暮らしで自宅の安定通信が必要なため、固定回線の条件確認が役立ちます。" : "",
-        device_replacement: replacement !== "none" ? "3年以内に端末を替える予定があるため、売却条件の確認対象です。" : ""
-      });
-      const result = field("diagnosis-result");
-      if (result) result.classList.add("is-ready");
+  function collectInput() {
+    return {
+      currentMobile: valueOf("m1"), dataUsage: valueOf("data-usage"), currentWifi: valueOf("w1"),
+      wifiStatus: valueText("wifi-status"), housing: valueText("housing"), stableHome: checked("stable-home"),
+      currentDeviceMethod: valueText("current-device-method"), currentDeviceBalance: valueOf("balance"),
+      currentDeviceMonthly: valueOf("device-monthly"), currentDeviceMonthsLeft: valueOf("device-months-left"),
+      replacement: valueText("replacement"), replacementCostMode: valueText("replacement-cost-mode"),
+      replacementDeviceCost: valueOf("replacement-device-cost"), replacementDeviceMonths: valueOf("replacement-device-months"),
+      resale: valueOf("sale"), targetMobileMin: valueOf("target-mobile-min"),
+      targetMobileBalance: valueOf("target-mobile-balance"), targetWifi: valueOf("target-wifi")
     };
+  }
 
+  function calculateCosts(options) {
+    if (!field("cost-form") || !window.CostEngine) return;
+    const input = collectInput();
+    const result = window.CostEngine.calculate(input, costModel());
+    const render = () => {
+      updateText("old3", result.currentTotal);
+      updateText("min3", result.costMinTotal);
+      updateText("save3", result.saving);
+      updateText("savings-label", result.saving < 0 ? "3年間の追加費用" : "3年間の削減余地");
+      field("savings-panel")?.classList.toggle("is-negative", result.saving < 0);
+      updateText("breakdown-mobile", result.currentMobile36);
+      updateText("breakdown-wifi", result.currentWifi36);
+      updateText("breakdown-device-obligation", result.deviceObligation);
+      updateText("breakdown-replacement", result.replacementCost);
+      updateText("breakdown-sale", result.saleCredit ? -result.saleCredit : 0);
+      updateText("breakdown-total", result.currentTotal);
+      updateText("plan-min-total", result.costMinTotal);
+      updateText("plan-balance-total", result.balancedTotal);
+      updateText("plan-easy-total", result.easyTotal);
+      updateText("plan-min-detail", `スマホ月額${yen(result.targets.mobileMin)}、自宅回線${yen(result.targets.wifi)}を上限目標にした比較用モデルです。端末関連は現在条件と同じです。`);
+      updateText("plan-balance-detail", `スマホ月額${yen(result.targets.mobileBalance)}を目標に、必要な場合は自宅回線を維持します。端末関連は現在条件と同じです。`);
+      updateText("plan-easy-detail", "契約変更を前提にせず、入力した通信費・残債・買い替え予算・売却見込みを36か月で合算した比較基準です。");
+      const caption = field("save-caption");
+      if (caption) caption.textContent = result.saving > 0 ? "比較用モデルとの差額" : result.saving < 0 ? "比較用モデルへ寄せた場合の増加額" : "現在条件と同額";
+      renderTags(input.housing, input.wifiStatus, input.dataUsage, input.replacement);
+      renderOffers({
+        mobile_saving: result.mobileSavingNeeded ? "現在のスマホ月額と比較用目標の差が大きいため、回線条件の確認対象です。" : "",
+        home_internet_needed: result.needsHomeInternet ? "一人暮らしで自宅の安定通信が必要なため、固定回線の公式条件を確認できます。" : "",
+        device_replacement: input.replacement !== "none" ? "3年以内に端末を替える予定があるため、売却条件の確認対象です。" : ""
+      });
+      field("diagnosis-result")?.classList.add("is-ready");
+    };
     const button = field("calculate-button");
-    if (options && options.loading && button) {
+    if (options?.loading && button) {
       button.classList.add("is-loading");
       button.setAttribute("aria-busy", "true");
       window.setTimeout(() => {
@@ -167,32 +137,40 @@
         button.removeAttribute("aria-busy");
         field("diagnosis-result")?.scrollIntoView({ behavior: "smooth", block: "start" });
       }, 160);
-    } else {
-      render();
-    }
-    if (options && options.complete) {
+    } else render();
+    if (options?.complete) {
       const params = new URLSearchParams(window.location.search);
-      track("diagnosis_complete", {
-        source: params.get("source") || "direct",
-        intent_group: params.get("intent") || "",
-        plan: "three_options"
-      });
+      track("diagnosis_complete", { source: params.get("source") || "direct", intent_group: params.get("intent") || "", plan: "three_options" });
     }
   }
 
-  function updateDeviceMode() {
-    const purchase = valueText("device-mode") === "purchase";
-    updateText("device-cost-label", purchase ? "端末購入額" : "端末月額");
-    updateText("device-cost-unit", purchase ? "円/回" : "円/月");
-    const input = field("d1");
-    if (input) input.max = purchase ? "1000000" : "100000";
+  function syncModelTargets(force) {
+    const model = costModel();
+    const tier = window.CostEngine?.tierFor(valueOf("data-usage"), model);
+    if (!tier) return;
+    const values = { "target-mobile-min": tier.cost_min_yen, "target-mobile-balance": tier.balance_yen, "target-wifi": model.home_internet_target_yen };
+    Object.entries(values).forEach(([id, value]) => {
+      const node = field(id);
+      if (node && (force || node.dataset.userEdited !== "true")) node.value = String(value);
+    });
+  }
+
+  function updateConditionalFields() {
+    const monthlyRemaining = valueText("current-device-method") === "monthly_remaining";
+    if (field("device-balance-fields")) field("device-balance-fields").hidden = monthlyRemaining;
+    if (field("device-monthly-fields")) field("device-monthly-fields").hidden = !monthlyRemaining;
+    const replacing = valueText("replacement") !== "none";
+    if (field("replacement-fields")) field("replacement-fields").hidden = !replacing;
+    const replacementMonthly = valueText("replacement-cost-mode") === "monthly";
+    if (field("replacement-months-field")) field("replacement-months-field").hidden = !replacementMonthly;
+    updateText("replacement-cost-label", replacementMonthly ? "端末月額予算" : "端末購入予算");
+    updateText("replacement-cost-unit", replacementMonthly ? "円/月" : "円");
   }
 
   window.calc = () => calculateCosts({ loading: true, complete: true });
-
   document.addEventListener("DOMContentLoaded", () => {
     const form = field("cost-form");
-    if (!form) return;
+    if (!form || !window.CostEngine) return;
     let started = false;
     const markStarted = () => {
       if (started) return;
@@ -200,20 +178,20 @@
       const params = new URLSearchParams(window.location.search);
       track("diagnosis_start", { source: params.get("source") || "direct", intent_group: params.get("intent") || "" });
     };
+    ["target-mobile-min", "target-mobile-balance", "target-wifi"].forEach((id) => {
+      field(id)?.addEventListener("input", (event) => { event.currentTarget.dataset.userEdited = "true"; });
+    });
     form.addEventListener("focusin", markStarted, { once: true });
     form.addEventListener("submit", (event) => {
-      event.preventDefault();
-      markStarted();
-      calculateCosts({ loading: true, complete: true });
+      event.preventDefault(); markStarted(); calculateCosts({ loading: true, complete: true });
     });
-    form.querySelectorAll("input, select").forEach((input) => {
-      input.addEventListener("change", () => {
-        if (input.id === "device-mode") updateDeviceMode();
-        if (field("diagnosis-result")?.classList.contains("is-ready")) {
-          calculateCosts({ loading: false, complete: false });
-        }
-      });
-    });
-    updateDeviceMode();
+    form.querySelectorAll("input, select").forEach((input) => input.addEventListener("change", () => {
+      if (input.id === "data-usage") syncModelTargets(false);
+      updateConditionalFields();
+      if (field("diagnosis-result")?.classList.contains("is-ready")) calculateCosts({ loading: false, complete: false });
+    }));
+    syncModelTargets(true);
+    updateConditionalFields();
+    calculateCosts({ loading: false, complete: false });
   });
 })();

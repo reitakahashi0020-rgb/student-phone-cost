@@ -93,6 +93,13 @@ button, a { -webkit-tap-highlight-color: transparent; }
 .form-section + .form-section { padding-top: 28px; border-top: 1px solid var(--color-line); }
 .form-section legend { margin-bottom: 20px; font-weight: 850; }
 .form-section legend span { margin-right: 9px; color: var(--color-primary); font-family: Georgia, serif; }
+.field-help { margin: -8px 0 15px; color: var(--color-muted); font-size: .68rem; line-height: 1.55; }
+.conditional-fields[hidden], #replacement-months-field[hidden] { display: none; }
+.conditional-fields { margin-top: 14px; }
+.model-section { padding: 20px !important; border: 1px solid var(--color-line-dark) !important; background: #F3F6FF; }
+.model-section legend { padding-top: 0; }
+.model-notice { margin: -8px 0 18px; color: var(--color-muted); font-size: .7rem; line-height: 1.6; }
+.model-notice strong { color: var(--color-primary-dark); }
 .field-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 17px 14px; }
 .field-grid > label, .choice-grid > label { display: grid; align-content: start; gap: 6px; color: var(--color-ink-soft); font-size: .76rem; font-weight: 800; }
 .input-with-unit { display: flex; min-width: 0; align-items: center; border-bottom: 1px solid var(--color-line-dark); background: #FBFAF7; transition: border var(--transition), box-shadow var(--transition); }
@@ -125,6 +132,8 @@ select { width: 100%; min-height: 45px; padding: 9px 30px 9px 9px; border: 0; bo
 .savings-number span { font-size: .78rem; font-weight: 850; }
 .savings-number strong { margin-left: auto; font-family: Georgia, serif; font-size: 2rem; }
 .savings-number small { color: #4E551C; font-size: .63rem; }
+.savings-number.is-negative { background: #F7D8D1; }
+.savings-number.is-negative small { color: #7A382C; }
 .cost-breakdown { margin-top: 26px; border-left: 5px solid var(--color-primary); background: white; }
 .cost-breakdown h3 { margin: 0; padding: 15px 18px 8px; font-size: .9rem; }
 .cost-breakdown dl { margin: 0; padding: 0 18px 12px; }
@@ -152,6 +161,11 @@ select { width: 100%; min-height: 45px; padding: 9px 30px 9px 9px; border: 0; bo
 .affiliate-cta-head strong { display: block; font-size: .9rem; }
 .affiliate-cta-head p { margin: 2px 0 0; color: var(--color-muted); font-size: .68rem; }
 .affiliate-cta > small { display: block; margin-top: 9px; color: var(--color-muted); font-size: .6rem; }
+.rate-evidence { margin-top: 13px; padding-top: 12px; border-top: 1px solid var(--color-line); color: var(--color-muted); font-size: .67rem; }
+.rate-evidence summary { cursor: pointer; color: var(--color-primary-dark); font-weight: 800; }
+.rate-evidence ul { padding-left: 18px; }
+.rate-evidence li { margin: 8px 0; line-height: 1.55; }
+.rate-evidence p { margin: 8px 0 0; line-height: 1.55; }
 .a8-material { max-width: 100%; overflow-wrap: anywhere; }
 .a8-material > a { display: flex; min-height: 46px; align-items: center; justify-content: center; padding: 10px 14px; border: 1px solid var(--color-primary); background: var(--color-primary); color: white; font-size: .78rem; font-weight: 850; line-height: 1.4; text-align: center; text-decoration: none; }
 .a8-material > a:hover { background: var(--color-primary-dark); color: white; }
