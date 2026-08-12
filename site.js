@@ -46,7 +46,10 @@
     const templates = Array.from(registry.querySelectorAll("template.offer-template"));
     const selected = templates.filter((template) => Boolean(rules[template.dataset.rule])).slice(0, 2);
     const empty = field("offer-empty");
-    if (empty) empty.hidden = selected.length > 0;
+    if (empty) {
+      empty.textContent = "現在、表示できる承認済み案件はありません。診断結果だけでも利用できます。";
+      empty.hidden = selected.length > 0;
+    }
     selected.forEach((template) => {
       const fragment = template.content.cloneNode(true);
       const cta = fragment.querySelector(".affiliate-cta");
@@ -120,11 +123,15 @@
       const caption = field("save-caption");
       if (caption) caption.textContent = result.saving > 0 ? "比較用モデルとの差額" : result.saving < 0 ? "比較用モデルへ寄せた場合の増加額" : "現在条件と同額";
       renderTags(input.housing, input.wifiStatus, input.dataUsage, input.replacement);
-      renderOffers({
-        mobile_saving: result.mobileSavingNeeded ? "現在のスマホ月額と比較用目標の差が大きいため、回線条件の確認対象です。" : "",
-        home_internet_needed: result.needsHomeInternet ? "一人暮らしで自宅の安定通信が必要なため、固定回線の公式条件を確認できます。" : "",
-        device_replacement: input.replacement !== "none" ? "3年以内に端末を替える予定があるため、売却条件の確認対象です。" : ""
-      });
+      const offerArea = field("offer-recommendations");
+      if (options?.complete || offerArea?.dataset.revealed === "true") {
+        if (offerArea) offerArea.dataset.revealed = "true";
+        renderOffers({
+          mobile_saving: result.mobileSavingNeeded ? "現在のスマホ月額と比較用目標の差が大きいため、回線条件の確認対象です。" : "",
+          home_internet_needed: result.needsHomeInternet ? "一人暮らしで自宅の安定通信が必要なため、固定回線の公式条件を確認できます。" : "",
+          device_replacement: input.replacement !== "none" ? "3年以内に端末を替える予定があるため、売却条件の確認対象です。" : ""
+        });
+      }
       field("diagnosis-result")?.classList.add("is-ready");
     };
     const button = field("calculate-button");
