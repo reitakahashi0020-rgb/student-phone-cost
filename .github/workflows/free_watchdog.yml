@@ -1,0 +1,23 @@
+name: Free static health and monetization check
+on:
+  workflow_dispatch:
+  schedule:
+    # Mon/Wed/Fri/Sun JST. No content generation, paid APIs, ad clicks or artifacts.
+    - cron: '25 3 * * 0,1,3,5'
+permissions:
+  contents: read
+  issues: write
+concurrency:
+  group: free-static-watchdog
+  cancel-in-progress: false
+jobs:
+  inspect:
+    if: github.repository == 'reitakahashi0020-rgb/student-phone-cost' && github.event.repository.private == false
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+      - name: Check only our static origin; deduplicate actionable alerts
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: python .github/scripts/public_watchdog.py

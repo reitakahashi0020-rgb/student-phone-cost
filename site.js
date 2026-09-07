@@ -8,6 +8,31 @@
   const valueOf = (id) => Math.max(0, Number(field(id)?.value) || 0);
   const valueText = (id) => field(id)?.value || "";
   const checked = (id) => Boolean(field(id)?.checked);
+  function acquisition() {
+    let intents = [];
+    try { intents = JSON.parse(field("known-intents")?.textContent || "[]"); } catch (_error) { /* fail closed */ }
+    return window.OfferPolicy.acquisition(window.location.search, intents);
+  }
+
+  function revealMaterial(container) {
+    const template = container.querySelector("template.registered-material");
+    if (!template || !window.OfferPolicy.current(template.dataset.expiresAt)) {
+      container.replaceChildren(document.createTextNode("広告条件の確認期限を過ぎたため、申込先を非表示にしています。"));
+      return;
+    }
+    container.dataset.expiresAt = template.dataset.expiresAt;
+    container.querySelector(".reveal-offer")?.remove();
+    container.appendChild(template.content.cloneNode(true));
+    template.remove();
+  }
+
+  function expireMaterial() {
+    document.querySelectorAll(".a8-material[data-expires-at]").forEach((node) => {
+      if (!window.OfferPolicy.current(node.dataset.expiresAt)) {
+        node.replaceChildren(document.createTextNode("広告条件を再確認中です。"));
+      }
+    });
+  }
   const updateText = (id, value) => {
     const node = field(id);
     if (node) node.textContent = typeof value === "number" ? yen(value) : value;
@@ -44,7 +69,10 @@
     if (!target || !registry) return;
     target.querySelectorAll(".affiliate-cta").forEach((node) => node.remove());
     const templates = Array.from(registry.querySelectorAll("template.offer-template"));
-    const selected = templates.filter((template) => Boolean(rules[template.dataset.rule])).slice(0, 2);
+    const selected = templates.filter((template) => {
+      const material = template.content.querySelector(".registered-material");
+      return Boolean(rules[template.dataset.rule]) && (!material || window.OfferPolicy.current(material.dataset.expiresAt));
+    }).slice(0, 2);
     const empty = field("offer-empty");
     if (empty) {
       empty.textContent = "現在、表示できる承認済み案件はありません。診断結果だけでも利用できます。";
@@ -55,8 +83,9 @@
       const cta = fragment.querySelector(".affiliate-cta");
       const reason = fragment.querySelector(".offer-reason");
       if (reason) reason.textContent = rules[template.dataset.rule];
+      fragment.querySelectorAll(".a8-material").forEach(revealMaterial);
       if (cta) {
-        cta.querySelectorAll("a").forEach((link) => link.addEventListener("click", () => {
+        cta.querySelectorAll(".a8-material a, a.button-primary").forEach((link) => link.addEventListener("click", () => {
           track("affiliate_cta_click", {
             offer_id: cta.dataset.offerId || "",
             offer_category: cta.dataset.offerCategory || "",
@@ -123,6 +152,11 @@
       const caption = field("save-caption");
       if (caption) caption.textContent = result.saving > 0 ? "比較用モデルとの差額" : result.saving < 0 ? "比較用モデルへ寄せた場合の増加額" : "現在条件と同額";
       renderTags(input.housing, input.wifiStatus, input.dataUsage, input.replacement);
+      updateText("next-action-text", result.saving <= 0
+        ? "今の条件を維持する案も有力です。乗り換え費用や手間をかけてまで契約を変える必要があるか確認してください。"
+        : result.mobileSavingNeeded
+          ? "スマホ契約の請求内訳から確認しましょう。上の差額は目標予算との比較です。実際の候補が見つかったら、通常料金・初期費用・解約費用で再計算してください。"
+          : "Wi-Fiの必要性と請求内訳を確認しましょう。回線を追加すると総支出が増える場合があります。用途と提供エリアが合うものだけ比較してください。");
       const offerArea = field("offer-recommendations");
       if (options?.complete || offerArea?.dataset.revealed === "true") {
         if (offerArea) offerArea.dataset.revealed = "true";
@@ -146,8 +180,10 @@
       }, 160);
     } else render();
     if (options?.complete) {
-      const params = new URLSearchParams(window.location.search);
-      track("diagnosis_complete", { source: params.get("source") || "direct", intent_group: params.get("intent") || "", plan: "three_options" });
+      if (!field("cost-form").dataset.completionTracked) {
+        track("diagnosis_complete", { ...acquisition(), plan: "three_options" });
+        field("cost-form").dataset.completionTracked = "true";
+      }
     }
   }
 
@@ -176,14 +212,30 @@
 
   window.calc = () => calculateCosts({ loading: true, complete: true });
   document.addEventListener("DOMContentLoaded", () => {
+    document.querySelectorAll(".a8-material .reveal-offer").forEach((button) => {
+      button.addEventListener("click", () => revealMaterial(button.closest(".a8-material")), { once: true });
+    });
+    // Expiry applies even to an already open tab or an old cached release.
+    window.setInterval(expireMaterial, 60000);
+    document.addEventListener("visibilitychange", expireMaterial);
+    document.addEventListener("click", (event) => {
+      const link = event.target.closest(".a8-material a");
+      const material = link?.closest(".a8-material");
+      if (!material) return;
+      if (!window.OfferPolicy.current(material.dataset.expiresAt)) {
+        event.preventDefault(); expireMaterial(); return;
+      }
+      if (!material.closest("#offer-recommendations")) {
+        track("affiliate_cta_click", { offer_id: material.dataset.offer || "", plan: "article" });
+      }
+    }, true);
     const form = field("cost-form");
     if (!form || !window.CostEngine) return;
     let started = false;
     const markStarted = () => {
       if (started) return;
       started = true;
-      const params = new URLSearchParams(window.location.search);
-      track("diagnosis_start", { source: params.get("source") || "direct", intent_group: params.get("intent") || "" });
+      track("diagnosis_start", acquisition());
     };
     ["target-mobile-min", "target-mobile-balance", "target-wifi"].forEach((id) => {
       field(id)?.addEventListener("input", (event) => { event.currentTarget.dataset.userEdited = "true"; });

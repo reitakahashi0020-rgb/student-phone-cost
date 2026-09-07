@@ -1,8 +1,8 @@
 (function (root) {
   "use strict";
 
-  const nonNegative = (value) => Math.max(0, Number(value) || 0);
-  const monthsInHorizon = (value, horizon) => Math.min(nonNegative(value), horizon);
+  const nonNegative = (value) => Number.isFinite(Number(value)) ? Math.max(0, Number(value)) : 0;
+  const monthsInHorizon = (value, horizon) => Math.min(Math.floor(nonNegative(value)), horizon);
 
   function currentDeviceObligation(input, horizon) {
     if (input.currentDeviceMethod === "monthly_remaining") {
@@ -48,8 +48,8 @@
     const needsHomeInternet = input.housing === "alone" && (Boolean(input.stableHome) || nonNegative(input.dataUsage) > 20);
     const costMinMobile = Math.min(currentMobile, targetMobileMin);
     const balanceMobile = Math.min(currentMobile, targetMobileBalance);
-    const costMinWifi = input.housing === "family" ? 0 : needsHomeInternet ? (currentWifi ? Math.min(currentWifi, targetWifi) : targetWifi) : 0;
-    const balanceWifi = input.housing === "family" ? 0 : needsHomeInternet ? (currentWifi || targetWifi) : 0;
+    const costMinWifi = input.housing === "family" ? currentWifi : needsHomeInternet ? (currentWifi ? Math.min(currentWifi, targetWifi) : targetWifi) : 0;
+    const balanceWifi = input.housing === "family" ? currentWifi : needsHomeInternet ? (currentWifi || targetWifi) : 0;
     const costMinTotal = Math.max(0, costMinMobile * horizon + costMinWifi * horizon + sharedDeviceNet);
     const balancedTotal = Math.max(0, balanceMobile * horizon + balanceWifi * horizon + sharedDeviceNet);
 
