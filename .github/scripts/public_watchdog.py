@@ -4,6 +4,7 @@ import json
 import os
 from pathlib import Path
 import subprocess
+import time
 from urllib.error import HTTPError, URLError
 from urllib.parse import urlsplit
 from urllib.request import HTTPRedirectHandler, Request, build_opener
@@ -31,8 +32,9 @@ def inspect(root, fetch):
             expected = (root / name).read_bytes()
             if hashlib.sha256(actual).digest() != hashlib.sha256(expected).digest():
                 problems.append(f'{name}: deployed bytes differ from the reviewed release')
-        except (HTTPError, URLError, TimeoutError, OSError):
-            problems.append(f'{name}: unavailable (no affiliate requests made)')
+        except (HTTPError, URLError, TimeoutError, OSError) as error:
+            code = error.code if isinstance(error, HTTPError) else type(error).__name__
+            problems.append(f'{name}: unavailable ({code}; no affiliate requests made)')
     for offer in manifest['offers']:
         expiry = datetime.fromisoformat(offer['expires_at'])
         if expiry <= datetime.now(timezone.utc) + timedelta(days=7):
@@ -50,8 +52,15 @@ def main():
     root = Path.cwd()
     opener = build_opener(NoRedirects())
     def fetch(url):
-        with opener.open(Request(url, headers={'User-Agent': 'CostLab-Static-Health/1.0'}), timeout=15) as response:
-            return response.read(2_000_000)
+        for attempt in range(3):
+            try:
+                with opener.open(Request(url, headers={'User-Agent': 'CostLab-Static-Health/1.0'}), timeout=10) as response:
+                    return response.read(2_000_000)
+            except (HTTPError, URLError, TimeoutError, OSError) as error:
+                transient = not isinstance(error, HTTPError) or error.code in (404, 408, 429, 500, 502, 503, 504)
+                if attempt == 2 or not transient:
+                    raise
+                time.sleep(1)
     problems = inspect(root, fetch)
     print('STATIC_HEALTH_OK' if not problems else '\n'.join(problems))
     if not os.getenv('GITHUB_ACTIONS'):
