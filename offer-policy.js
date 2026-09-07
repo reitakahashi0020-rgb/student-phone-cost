@@ -4,6 +4,15 @@
     const expiry = Date.parse(expiresAt || "");
     return Number.isFinite(expiry) && now < expiry;
   }
+  function onRegisteredSite(registered, currentUrl) {
+    try {
+      const approved = new URL(registered);
+      const actual = new URL(currentUrl);
+      const base = approved.pathname.replace(/\/$/, "");
+      return approved.protocol === "https:" && actual.origin === approved.origin
+        && (actual.pathname === base || actual.pathname.startsWith(base + "/"));
+    } catch (_error) { return false; }
+  }
   function acquisition(search, knownIntents) {
     const params = new URLSearchParams(search);
     const source = params.get("source");
@@ -13,5 +22,5 @@
       intent_group: knownIntents.includes(intent) ? intent : ""
     };
   }
-  root.OfferPolicy = { current, acquisition };
+  root.OfferPolicy = { current, acquisition, onRegisteredSite };
 })(typeof globalThis !== "undefined" ? globalThis : window);

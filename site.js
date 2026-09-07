@@ -15,6 +15,10 @@
   }
 
   function revealMaterial(container) {
+    if (!window.OfferPolicy.onRegisteredSite(container.dataset.registeredSite, window.location.href)) {
+      container.replaceChildren(document.createTextNode("このURLでの広告掲載を準備中です。診断と公式出典は利用できます。"));
+      return;
+    }
     const template = container.querySelector("template.registered-material");
     if (!template || !window.OfferPolicy.current(template.dataset.expiresAt)) {
       container.replaceChildren(document.createTextNode("広告条件の確認期限を過ぎたため、申込先を非表示にしています。"));
@@ -71,6 +75,8 @@
     const templates = Array.from(registry.querySelectorAll("template.offer-template"));
     const selected = templates.filter((template) => {
       const material = template.content.querySelector(".registered-material");
+      const wrapper = template.content.querySelector(".a8-material");
+      if (wrapper && !window.OfferPolicy.onRegisteredSite(wrapper.dataset.registeredSite, window.location.href)) return false;
       return Boolean(rules[template.dataset.rule]) && (!material || window.OfferPolicy.current(material.dataset.expiresAt));
     }).slice(0, 2);
     const empty = field("offer-empty");
@@ -213,6 +219,11 @@
   window.calc = () => calculateCosts({ loading: true, complete: true });
   document.addEventListener("DOMContentLoaded", () => {
     document.querySelectorAll(".a8-material .reveal-offer").forEach((button) => {
+      const container = button.closest(".a8-material");
+      if (!window.OfferPolicy.onRegisteredSite(container.dataset.registeredSite, window.location.href)) {
+        container.replaceChildren(document.createTextNode("このURLでの広告掲載を準備中です。診断と公式出典は利用できます。"));
+        return;
+      }
       button.addEventListener("click", () => revealMaterial(button.closest(".a8-material")), { once: true });
     });
     // Expiry applies even to an already open tab or an old cached release.
@@ -222,7 +233,8 @@
       const link = event.target.closest(".a8-material a");
       const material = link?.closest(".a8-material");
       if (!material) return;
-      if (!window.OfferPolicy.current(material.dataset.expiresAt)) {
+      if (!window.OfferPolicy.onRegisteredSite(material.dataset.registeredSite, window.location.href)
+          || !window.OfferPolicy.current(material.dataset.expiresAt)) {
         event.preventDefault(); expireMaterial(); return;
       }
       if (!material.closest("#offer-recommendations")) {
